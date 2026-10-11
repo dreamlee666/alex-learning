@@ -81,6 +81,44 @@ def text_field(body,key,maximum=8000,required=True):
 def install(app,store,check_action,events,connection):
     init(store)
     lock=asyncio.Lock()
+    from .stellaris_library import StellarisLibrary
+    game_library=StellarisLibrary(store.directory)
+
+    @app.get('/study/stellaris/status')
+    async def game_status():
+        return await asyncio.to_thread(game_library.status)
+
+    @app.post('/study/stellaris/import')
+    async def game_import(request:Request):
+        check_action(request);body=await request.json()
+        try:
+            path=text_field(body,'path',1000,False)
+            if not path:
+                detected=(await asyncio.to_thread(game_library.status))['detected']
+                if len(detected)!=1:raise ValueError('请填写群星安装目录。')
+                path=detected[0]
+            return await asyncio.to_thread(game_library.import_game,path)
+        except ValueError as e:raise HTTPException(400,str(e))
+
+    @app.get('/study/stellaris/search')
+    async def game_search(q:str=''):
+        return {'matches':await asyncio.to_thread(game_library.search,q[:1000])}
+
+    @app.post('/study/companion/text-capture')
+    async def text_capture(request:Request):
+        check_action(request);body=await request.json()
+        try:text=text_field(body,'text',16000)
+        except ValueError as e:raise HTTPException(400,str(e))
+        ident=uuid.uuid4().hex
+        with store.connect() as c:c.execute('INSERT INTO companion_captures VALUES(?,?,?)',(ident,text,stamp()))
+        return {'id':ident,'text':text}
+
+    @app.post('/study/stellaris/match')
+    async def game_match(request:Request):
+        check_action(request);body=await request.json()
+        try:text=text_field(body,'text',16000)
+        except ValueError as e:raise HTTPException(400,str(e))
+        return {'matches':await asyncio.to_thread(game_library.match_screen,text)}
 
     async def model(system,body):
         name=connection().get('model')

@@ -17,7 +17,7 @@ import zipfile
 
 SOURCE = Path(__file__).resolve().parents[2]
 PACKAGING = Path(__file__).resolve().parent
-VERSION = '0.4.0'
+VERSION = '0.4.1'
 NAME = 'Alex-Learning'
 BASE_PYTHON = Path(sys.base_prefix)
 RELEASE = SOURCE.parent / 'release'
@@ -144,7 +144,7 @@ def build(continue_build=False):
         shutil.copyfile(SOURCE / name, APP / name)
     dep = APP / 'deployment'
     dep.mkdir(exist_ok=True)
-    for name in ('companion.py', 'companion-ui.js', 'speech_text.py', 'COMPANION-GUIDE.md', 'IMPORT-GUIDE.md', 'providers.py', 'learning.py', 'learning_routes.py', 'learning-ui.js', 'LEARNING-REFERENCES.md', 'teaching.py', 'configure.py', 'launch_tutor.py', 'plan_gateway.py', 'voice_server.py', 'study_store.py', 'study_routes.py',
+    for name in ('stellaris_library.py', 'STELLARIS-GUIDE.md', 'companion.py', 'companion-ui.js', 'speech_text.py', 'COMPANION-GUIDE.md', 'IMPORT-GUIDE.md', 'providers.py', 'learning.py', 'learning_routes.py', 'learning-ui.js', 'LEARNING-REFERENCES.md', 'teaching.py', 'configure.py', 'launch_tutor.py', 'plan_gateway.py', 'voice_server.py', 'study_store.py', 'study_routes.py',
                  'study.html', 'study.js', 'import-queue.js', 'voice-turn.js', 'study.css', 'settings.html', 'voice-profile.json',
                  'installed-requirements.txt', 'voice-requirements.txt', 'study-requirements.txt', 'asr-model-provenance.json'):
         shutil.copyfile(SOURCE / 'deployment' / name, dep / name)
@@ -207,7 +207,7 @@ def build(continue_build=False):
     subprocess.run([str(csc), '/nologo', '/target:winexe', '/platform:x64', '/optimize+',
                     '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll',
                     '/out:' + str(DEST / 'Alex-Learning.exe'), str(DEST / 'launcher' / 'Launcher.cs')], check=True)
-    subprocess.run([str(csc), '/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/out:' + str(DEST / 'Alex-Game-Companion.exe'), str(DEST / 'launcher' / 'GameCompanion.cs')], check=True)
+    subprocess.run([str(csc), '/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Web.Extensions.dll', '/out:' + str(DEST / 'Alex-Game-Companion.exe'), str(DEST / 'launcher' / 'GameCompanion.cs')], check=True)
     write(DEST / '停止课堂.cmd', '@echo off\n"%~dp0runtime\\python\\python.exe" -X utf8 "%~dp0launcher\\bootstrap.py" --stop\npause\n')
     size = sum(p.stat().st_size for p in DEST.rglob('*') if p.is_file())
     write(DEST / 'package-manifest.json', json.dumps({'name': 'Alex Learning Portable', 'version': VERSION,

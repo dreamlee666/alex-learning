@@ -1,0 +1,13 @@
+{
+  "version": "0.4.1",
+  "python_tests_passed": 57,
+  "javascript_tests_passed": 12,
+  "game_fixture_tests_passed": 5,
+  "real_local_corpus_lookup": "passed",
+  "real_ocr": "Fleet upkeep ir\nincreases.",
+  "clipboard_capture_api": "passed",
+  "native_helper_compile": "passed",
+  "native_hotkey_and_game_capture_interactive": "not automated",
+  "corpus_not_bundled": true,
+  "ocr_note": "识别结果含多余字符，界面保留原文供人工核对，不声称 OCR 无误。"
+}

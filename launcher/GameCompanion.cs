@@ -8,6 +8,8 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.ComponentModel;
 using System.Windows.Forms;
+using System.Text;
+using System.Web.Script.Serialization;
 
 // MIT. Captures only on explicit hotkey/selection; sends cropped pixels to loopback OCR.
 class GameCompanion : Form {
@@ -18,16 +20,19 @@ class GameCompanion : Form {
     const string Origin="http://127.0.0.1:32194";
     Label status=new Label(); bool busy; static Mutex instance;
     GameCompanion() {
-        Text="Alex · 游戏英语取词"; ClientSize=new Size(440,210); AutoScaleMode=AutoScaleMode.None;
+        Text="Alex · 游戏英语取词"; ClientSize=new Size(440,260); AutoScaleMode=AutoScaleMode.None;
         Font=new Font("Microsoft YaHei UI",10); FormBorderStyle=FormBorderStyle.FixedDialog; MaximizeBox=false;
-        var intro=new Label {Text="主屏玩游戏，副屏学英语。\nCtrl + Alt + Q 框选文字；Esc 取消。",Left=20,Top=18,Width=400,Height=55}; Controls.Add(intro);
+        var intro=new Label {Text="Ctrl + Alt + Q 框选文字；Esc 取消。\nCtrl + Alt + E 读取剪贴板（支持 TTime OCR）。",Left=20,Top=18,Width=400,Height=55}; Controls.Add(intro);
         var capture=new Button {Text="框选取词",Left=20,Top=85,Width=185,Height=40}; capture.Click+=delegate { CaptureRegion(); }; Controls.Add(capture);
         var open=new Button {Text="打开副屏伴读",Left=220,Top=85,Width=195,Height=40}; open.Click+=delegate {System.Diagnostics.Process.Start(Origin+"/study?mode=game");};Controls.Add(open);
-        status.SetBounds(20,140,395,55); status.Text="先启动课堂，再打开游戏伴读。截图仅在本机 OCR，保存识别文字。";Controls.Add(status);
-        Shown+=delegate {if(!RegisterHotKey(Handle,1,0x4000|0x0001|0x0002,0x51))status.Text="快捷键被其他程序占用，请使用「框选取词」按钮。";};
-        FormClosed+=delegate {UnregisterHotKey(Handle,1);};
+        var paste=new Button {Text="读取剪贴板文字",Left=20,Top=135,Width=395,Height=36};paste.Click+=delegate{ReadClipboard();};Controls.Add(paste);
+        status.SetBounds(20,185,395,65); status.Text="先启动课堂，再打开游戏伴读。仅在按快捷键时读取屏幕或剪贴板。";Controls.Add(status);
+        Shown+=delegate {bool q=RegisterHotKey(Handle,1,0x4000|0x0001|0x0002,0x51);bool e=RegisterHotKey(Handle,2,0x4000|0x0001|0x0002,0x45);if(!q||!e)status.Text="部分快捷键被其他程序占用，请使用相应按钮。";if(Array.IndexOf(Environment.GetCommandLineArgs(),"--open")>=0)System.Diagnostics.Process.Start(Origin+"/study?mode=game");};
+        FormClosed+=delegate {UnregisterHotKey(Handle,1);UnregisterHotKey(Handle,2);};
     }
-    protected override void WndProc(ref Message m) {if(m.Msg==0x0312 && m.WParam.ToInt32()==1)CaptureRegion();base.WndProc(ref m);}
+    protected override void WndProc(ref Message m) {if(m.Msg==0x0312){if(m.WParam.ToInt32()==1)CaptureRegion();if(m.WParam.ToInt32()==2)ReadClipboard();}base.WndProc(ref m);}
+    static string Send(string route,string contentType,byte[] payload){using(var client=new LocalClient()){client.Proxy=null;client.Encoding=Encoding.UTF8;var match=Regex.Match(client.DownloadString(Origin+"/study"),@"window\.SQE_CSRF='([^']+)'");if(!match.Success)throw new Exception("请先启动课堂。");client.Headers["X-SQE-CSRF"]=match.Groups[1].Value;client.Headers["Content-Type"]=contentType;return Encoding.UTF8.GetString(client.UploadData(Origin+route,"POST",payload));}}
+    void ReadClipboard(){if(busy)return;string text;try{text=Clipboard.GetText().Trim();}catch(Exception ex){status.Text=ex.Message;return;}if(text.Length==0||text.Length>16000){status.Text="请先复制文字（最多 16000 字符），或使用 TTime 的静默截图 OCR。";return;}busy=true;status.Text="正在传入副屏…";var worker=new BackgroundWorker();worker.DoWork+=delegate(object s,DoWorkEventArgs e){e.Result=Send("/study/companion/text-capture","application/json",Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(new {text=text})));};worker.RunWorkerCompleted+=delegate(object s,RunWorkerCompletedEventArgs e){busy=false;status.Text=e.Error==null?"剪贴板文字已送到游戏伴读。点击单词问老师。":"读取失败："+e.Error.Message;worker.Dispose();};worker.RunWorkerAsync();}
     void CaptureRegion() {
         if(busy)return; busy=true; Hide();
         BeginInvoke((MethodInvoker)delegate {
@@ -36,7 +41,7 @@ class GameCompanion : Form {
             catch(Exception ex){status.Text="截图失败："+ex.Message;}
             Show(); if(png==null){busy=false;return;}status.Text="正在本机识别，完成后查看副屏。";
             var worker=new BackgroundWorker();worker.DoWork+=delegate(object s,DoWorkEventArgs e) {
-                try {using(var client=new WebClient()) {
+                try {using(var client=new LocalClient()) {
                     client.Proxy=null;
                     string html=client.DownloadString(Origin+"/study");
                     var match=Regex.Match(html,@"window\.SQE_CSRF='([^']+)'");
@@ -56,6 +61,7 @@ class GameCompanion : Form {
         Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);Application.Run(new GameCompanion());instance.ReleaseMutex();instance.Dispose();
     }
 }
+class LocalClient : WebClient {protected override WebRequest GetWebRequest(Uri address){var request=base.GetWebRequest(address);request.Timeout=120000;return request;}}
 class Selection : Form {
     Bitmap desktop; Point start; Rectangle selection; bool dragging; public byte[] Png;
     public Selection() {
