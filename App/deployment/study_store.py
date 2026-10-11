@@ -354,6 +354,13 @@ def lesson_context(store, task_id, query):
     sources = list({s['id']: s for s in selected + extra}.values())[:5]
     plan = store.plan(task['plan_id'])
     instructions = teaching_instructions(plan['config'] if plan else {})
+    try:
+        from .companion import prepared
+        unit = prepared(store, task_id, False)
+        if unit['pack'] and not unit.get('stale'):
+            instructions += '\nPrepared lesson guidance (AI draft, verify against original sources): ' + json.dumps({k:unit['pack'][k] for k in ('objectives','concepts','terms','outline')}, ensure_ascii=False)[:16000]
+    except sqlite3.OperationalError:
+        pass  # Older/direct stores have no optional prepared-unit tables.
     citations = '\n\n'.join(f"[{s['id']}] {s['book']} · {s['location']} ({s['method']})\n{s['text']}" for s in sources)
     prompt = (
         'Current study task: ' + task['kind'] + '. ' + instructions + '\n'

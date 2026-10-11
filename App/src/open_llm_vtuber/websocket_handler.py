@@ -573,7 +573,8 @@ class WebSocketHandler:
             task = await asyncio.to_thread(StudyStore().task, str(tid))
             plan_id = task['plan_id']
         previous_plan = getattr(context, 'study_plan_id', None)
-        changed = plan_id != previous_plan
+        companion = data.get('companion') is True
+        changed = plan_id != previous_plan or companion != getattr(context, 'companion_mode', False)
         current = self.current_conversation_tasks.get(client_uid)
         if changed and current and not current.done():
             raise ValueError('请先结束当前回答，再切换课程。')
@@ -583,6 +584,8 @@ class WebSocketHandler:
         context.review_transcription = bool(data.get('review', False))
         context.study_plan_id = plan_id
         context.study_task_id = str(tid) if tid else None
+        context.companion_mode = companion
+        context.companion_context = str(data.get('companion_context', ''))[:16000] if companion else ''
         await websocket.send_text(json.dumps({'type': 'study-ready', 'task_id': context.study_task_id, 'new_course': changed}))
 
     async def _prepare_review(self, websocket, client_uid, audio):

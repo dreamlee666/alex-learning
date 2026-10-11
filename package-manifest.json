@@ -1,6 +1,6 @@
 {
   "name": "Alex Learning Portable",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "platform": "windows-x64",
   "ports": [
     32193,

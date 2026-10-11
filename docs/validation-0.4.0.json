@@ -1,0 +1,13 @@
+{
+  "version": "0.4.0",
+  "python_tests": 52,
+  "javascript_tests": 12,
+  "real_model_preparation": "passed; 2 source-grounded quizzes, answers hidden until submission",
+  "board_wrong_answer": "passed; local review count increased from 5 to 6 in isolated QA",
+  "game_english": "passed; upkeep in Ship upkeep increases with fleet size, response and local card saved",
+  "bilingual_speech": "passed; English and Chinese sequential audio rendered, 5.03 seconds",
+  "native_capture_helper": "compiled Windows x64 and self-test passed; hotkey drag and multi-monitor DPI not interactively verified",
+  "data": "existing local material library and database preserved; clean package excludes credentials and learning data",
+  "actual_local_ocr": "passed; synthetic Ship upkeep increases. screenshot recognized exactly",
+  "expression_analysis": "passed; I studies English corrected to I study English through editable learner panel"
+}

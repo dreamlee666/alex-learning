@@ -48,11 +48,13 @@
     if(!connected)throw Error('虚拟老师还未连接，请稍候或重新启动课堂。');
     $('teacher').contentWindow.postMessage({sqe:1,action,...fields},FRAME);
   }
-  function context() {post('context',{task_id:activeTask,review:$('review-enabled').checked})}
+  function context() {const game=window.extensionRoom?.gameMode;post('context',{task_id:game?null:activeTask,review:$('review-enabled').checked,companion:!!game,companion_context:game?window.extensionRoom.getPassage():''})}
   function view(name) {
+    if(window.extensionRoom && window.extensionRoom.gameMode !== (name==='game') && (busy||recording||reviewTicket)){notice('请先结束录音或回答，再切换课堂与游戏伴读。');return}
+    window.extensionRoom?.onView(name);
     document.querySelectorAll('.view').forEach(e=>e.hidden=e.id!=='view-'+name);
     document.querySelectorAll('.nav').forEach(e=>e.classList.toggle('active',e.dataset.view===name));
-    $('page-title').textContent={classroom:'今天，学懂一点。',library:'你的教材书架。',plan:'每天一小步。',notes:'理解，值得留下。',progress:'每一步，都算数。',review:'回忆，让知识留下。'}[name];
+    $('page-title').textContent={classroom:'今天，学懂一点。',game:'边玩，边学英语。',library:'你的教材书架。',plan:'每天一小步。',notes:'理解，值得留下。',progress:'每一步，都算数。',review:'回忆，让知识留下。'}[name];
     window.scrollTo(0,0);if(['progress','review'].includes(name))window.dispatchEvent(new Event('learning-view'));
   }
   document.querySelectorAll('.nav').forEach(e=>e.onclick=()=>view(e.dataset.view));
@@ -158,7 +160,7 @@
   async function selectTask(id, silent=false) {
     if(busy||recording||reviewTicket)throw Error('请先结束当前回答或录音，再换课。');
     const data=await api('/study/task/'+id);if(currentTask&&currentTask.plan_id!==data.task.plan_id)$('board-clear').click();activeTask=id;currentTask=data.task;localStorage.setItem('sqe-study-task',id);
-    $('lesson-title').textContent=data.task.title;setBoard(data.sources);if(connected)context();renderPlan();
+    $('lesson-title').textContent=data.task.title;setBoard(data.sources);if(connected)context();renderPlan();window.dispatchEvent(new Event('lesson-selected'));
     if(!silent){view('classroom');notice('教材已就位。点击「开始本节对话」，或直接说出你的问题。')}
   }
   function setBoard(data) {
@@ -193,6 +195,7 @@
   window.addEventListener('message',e=>{
     if(e.origin!==FRAME||e.source!==$('teacher').contentWindow||e.data?.sqe!==1)return;
     const d=e.data;
+    window.extensionRoom?.onTeacher(d);
     if(d.event==='connected'){connected=true;$('connection').textContent='老师已连接';try{context()}catch(error){notice(error.message)}}
     if(d.event==='disconnected'){if(recording)stopRecording(false).catch(()=>{});connected=false;busy=false;$('connection').textContent='老师已断开';notice('老师连接断开；教材和学习进度仍在本机。请重新启动课堂。')}
     if(d.event==='board'){sources=d.board.sources;currentTask=d.board.task;setBoard(sources)}
@@ -211,11 +214,11 @@
   $('review-dialog').addEventListener('cancel',e=>{e.preventDefault();$('review-cancel').click()});
   $('review-confirm').onclick=action(()=>{const text=$('review-text').value.trim();if(!text)throw Error('请填写转写内容，或取消后重录。');reviewCancelled=false;post('confirm',{request_id:reviewTicket,text})});
   $('review-cancel').onclick=action(()=>{reviewCancelled=true;post('confirm',{request_id:reviewTicket,cancel:true})});
-  $('send').onclick=action(()=>{if(busy||recording||reviewTicket)throw Error('请先结束当前录音或回复。');const text=$('message').value.trim();if(!text)return;post('text',{text});$('message').value='';notice('')});
+  $('send').onclick=action(()=>{if(busy||recording||reviewTicket)throw Error('请先结束当前录音或回复。');const text=$('message').value.trim();if(!text)return;context();post('text',{text});window.extensionRoom?.learner(text);$('message').value='';notice('')});
   $('message').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('send').click()}});
   $('interrupt').onclick=action(()=>post('interrupt'));
   $('start-lesson').onclick=action(()=>{if(!activeTask){view('plan');throw Error('请先在每日计划选择一节课。')}if(busy||recording||reviewTicket)throw Error('请先结束当前录音或回答。');post('text',{text:currentTask?.kind==='review'?'Start a recall review of this material. Ask me just one question in the selected teaching language, without explaining the answer or giving hints first. Wait for my answer.':'Start the current material-based lesson. Briefly introduce one key concept from the selected material on the blackboard, then ask me just one Socratic question in the selected teaching language. Wait for my answer.'});notice('')});
-  window.learningRoom={api,notice,view,refresh,getState:()=>state,getTask:()=>activeTask,selectTask};
+  window.learningRoom={api,notice,view,refresh,getState:()=>state,getTask:()=>activeTask,selectTask,context,sendText(text){$('message').value=text;$('send').click()},isBusy:()=>busy||recording||!!reviewTicket};
   $('complete-lesson').onclick=action(async()=>{
     if(!activeTask)throw Error('请先选择学习任务。');
     await api('/study/complete',{id:activeTask,date:localDate(),grade:$('review-grade').value});await refresh();notice('已保存完成记录。可以打开「课后整理与练习」，总结本节并开始回忆。');
@@ -230,7 +233,7 @@
     // Chunk below the existing backend message and 2-minute audio limits.
     for(const frame of captureFrames)post('audio',{audio:Array.from(frame)});
     captureFrames=[];captureLength=0;preRoll=[];preRollLength=0;turnDetector.reset();
-    awaitingResponse=true;post('audio-end');$('input-status').textContent='正在识别并发送…';return true;
+    context();awaitingResponse=true;post('audio-end');$('input-status').textContent='正在识别并发送…';return true;
   }
   async function stopRecording(submit=true) {
     if(!recording)return;

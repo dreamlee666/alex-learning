@@ -13,6 +13,8 @@ def install_study_routes(app, check_action, csrf, response_events, load_connecti
     store = StudyStore()
     from .learning_routes import install_learning_routes
     install_learning_routes(app, store, check_action, response_events, load_connection)
+    from .companion import install
+    install(app, store, check_action, response_events, load_connection)
     wake = asyncio.Event()
     worker = None
     stopping = False
@@ -48,7 +50,7 @@ def install_study_routes(app, check_action, csrf, response_events, load_connecti
 
     @app.get('/study/assets/{name}')
     async def asset(name: str):
-        if name not in ('study.js', 'study.css', 'voice-turn.js', 'learning-ui.js', 'import-queue.js'):
+        if name not in ('study.js', 'study.css', 'voice-turn.js', 'learning-ui.js', 'import-queue.js', 'companion-ui.js'):
             raise HTTPException(404)
         return Response((base / name).read_text(encoding='utf-8'), media_type='text/javascript' if name.endswith('.js') else 'text/css')
 

@@ -45,6 +45,10 @@ def tts_filter(
             logger.warning(f"Error ignoring brackets: {e}")
             logger.warning(f"Text: {text}")
             logger.warning("Skipping...")
+    # A bilingual vocabulary gloss is lesson content, not a stage direction.
+    # Convert ASCII parentheses before the generic ignore-parentheses filter.
+    text = re.sub(r"([A-Za-z][A-Za-z0-9'’ -]*)\s*\(([^()]*[\u3400-\u9fff][^()]*)\)",
+                  r"\1，\2", text)
     if ignore_parentheses:
         try:
             text = filter_parentheses(text)
@@ -179,7 +183,7 @@ def filter_angle_brackets(text: str) -> str:
 
 def filter_asterisks(text: str) -> str:
     """
-    Removes text enclosed within asterisks of any length (*, **, ***, etc.) from a string.
+    Keeps bold learning content while removing single-star stage directions.
 
     Args:
         text: The input string.
@@ -187,8 +191,10 @@ def filter_asterisks(text: str) -> str:
     Returns:
         The string with asterisk-enclosed text removed.
     """
-    # Handle asterisks of any length (*, **, ***, etc.)
-    filtered_text = re.sub(r"\*{1,}((?!\*).)*?\*{1,}", "", text)
+    # Bold marks learning terms; keep their contents. Single-star stage
+    # directions retain the existing ignore-asterisks behavior.
+    filtered_text = re.sub(r"\*{2,3}([^*]+)\*{2,3}", r"\1", text)
+    filtered_text = re.sub(r"\*[^*]+\*", "", filtered_text)
 
     # Clean up any extra spaces
     filtered_text = re.sub(r"\s+", " ", filtered_text).strip()

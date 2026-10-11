@@ -176,7 +176,7 @@ async def home():
 async def status():
     connection = load_connection()
     provider = connection.get('provider', 'chatgpt')
-    return {'app': 'sqe-english-tutor', 'package_instance': json.loads(RUNTIME.read_text(encoding='utf-8'))['package_instance'], 'version': '0.3.1', 'connected': bool(connection.get('access_token')) if provider == 'chatgpt' else bool(connection.get('api_configs', {}).get(provider)), 'provider': provider, 'plan_enabled': plan_enabled(connection),
+    return {'app': 'sqe-english-tutor', 'package_instance': json.loads(RUNTIME.read_text(encoding='utf-8'))['package_instance'], 'version': '0.4.0', 'connected': bool(connection.get('access_token')) if provider == 'chatgpt' else bool(connection.get('api_configs', {}).get(provider)), 'provider': provider, 'plan_enabled': plan_enabled(connection),
             'email': connection.get('email', ''), 'model': connection.get('model', ''),
             'tested': connection.get('tested', False)}
 

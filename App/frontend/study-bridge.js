@@ -72,6 +72,7 @@
         }
         if (d.type==='set-model-and-conf') notify('connected');
         if (d.type==='study-board') notify('board',{board:d});
+        if (d.type==='user-input-transcription') notify('learner-text',{text:d.text});
         if (d.type==='study-ready') notify('ready',{task_id:d.task_id});
         if (d.type==='transcription-processing') notify('transcribing');
         if (d.type==='transcription-review') {
@@ -106,7 +107,7 @@
     if(e.origin!==PARENT || e.source!==window.parent || e.data?.sqe!==1) return;
     const d=e.data;
     try {
-      if(d.action==='context') {taskId=d.task_id || null;review=d.review===true;send({type:'study-settings',review,task_id:taskId})}
+      if(d.action==='context') {taskId=d.task_id || null;review=d.review===true;send({type:'study-settings',review,task_id:taskId,companion:d.companion===true,companion_context:d.companion_context||''})}
       else if(d.action==='text') send({type:'text-input',text:String(d.text).slice(0,8000)});
       else if(d.action==='confirm') send({type:'transcription-confirm',request_id:d.request_id,text:d.text,cancel:d.cancel===true});
       else if(d.action==='audio') send({type:'mic-audio-data',audio:d.audio});

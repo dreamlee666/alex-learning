@@ -26,6 +26,10 @@ import onnxruntime as ort
 from pydantic import BaseModel, Field
 import soundfile as sf
 import uvicorn
+try:
+    from .speech_text import speech_runs
+except ImportError:  # Direct script launch used by the portable classroom.
+    from speech_text import speech_runs
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / 'models' / 'kokoro'
@@ -103,10 +107,8 @@ class VoiceEngine:
         profile = load_profile()
         with self.lock:
             parts = []
-            for sentence in re.split(r'(?<=[.!?。！？；;])\s*', text):
-                if not sentence.strip() or not any(character.isalnum() for character in sentence):
-                    continue
-                if re.search(r'[\u3400-\u9fff]', sentence):
+            for language, sentence in speech_runs(text):
+                if language == 'zh':
                     samples = self.chinese_audio(sentence, profile['brightness_db'])
                 else:
                     spoken = re.sub(r'\bSQE\b', 'S Q E', sentence, flags=re.I)
