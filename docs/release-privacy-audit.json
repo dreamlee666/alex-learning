@@ -1,0 +1,10 @@
+{
+  "version": "0.3.1",
+  "release_privacy_audit": "passed",
+  "text_files_scanned": 9943,
+  "checks": [
+    "excluded state filenames",
+    "known local runtime secrets",
+    "original user paths"
+  ]
+}

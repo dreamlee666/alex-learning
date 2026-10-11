@@ -1,0 +1,23 @@
+[
+  {
+    "name": "FFmpeg",
+    "filename": "ffmpeg-9.0.2-essentials_build.zip",
+    "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip",
+    "sha256": "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
+    "max_bytes": 262144000
+  },
+  {
+    "name": "eSpeakNG",
+    "filename": "espeakng_loader-0.2.4-py3-none-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/9d/ed/a3d872fbad4f3a3f3db0e8c31768ab14e77cd77306de16b8b20b1e1df7ea/espeakng_loader-0.2.4-py3-none-win_amd64.whl",
+    "sha256": "41f1e08ac9deda2efd1ea9de0b81dab9f5ae3c4b24284f76533d0a7b1dd7abd7",
+    "max_bytes": 62914560
+  },
+  {
+    "name": "VCRuntime",
+    "filename": "Microsoft.VCLibs.x64.14.00.Desktop.appx",
+    "url": "https://download.microsoft.com/download/4/7/c/47c6134b-d61f-4024-83bd-b9c9ea951c25/Microsoft.VCLibs.x64.14.00.Desktop.appx",
+    "sha256": "b56a9101f706f9d95f815f5b7fa6efbac972e86573d378b96a07cff5540c5961",
+    "max_bytes": 15728640
+  }
+]

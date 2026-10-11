@@ -1,0 +1,37 @@
+[
+  {
+    "file": "Open-LLM-VTuber-Web-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/Open-LLM-VTuber/Open-LLM-VTuber-Web/main/LICENSE",
+    "sha256": "12f7da34b1480c006316978a4460bb8cfbff57adabe30288d20c0e01f93fa550"
+  },
+  {
+    "file": "Kokoro-LICENSE.txt",
+    "url": "https://www.apache.org/licenses/LICENSE-2.0.txt",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "file": "Whisper-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/openai/whisper/main/LICENSE",
+    "sha256": "b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d"
+  },
+  {
+    "file": "espeakng-loader-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/thewh1teagle/espeakng-loader/main/LICENSE",
+    "sha256": "b05c73bb1335b4320ec97edff106b3991c12d0acdc6e899c96f061a15039119f"
+  },
+  {
+    "file": "GPL-3.0.txt",
+    "url": "https://raw.githubusercontent.com/espeak-ng/espeak-ng/1.52.0/COPYING",
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+  },
+  {
+    "file": "uv-redirector-LICENSE-MIT.txt",
+    "url": "https://raw.githubusercontent.com/astral-sh/uv/main/LICENSE-MIT",
+    "sha256": "860e3d7a86b84e6a7012c7a635fc64df475cebc6cce34dfeb73a5982ec58176c"
+  },
+  {
+    "file": "uv-redirector-LICENSE-APACHE.txt",
+    "url": "https://raw.githubusercontent.com/astral-sh/uv/main/LICENSE-APACHE",
+    "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+  }
+]
