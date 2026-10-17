@@ -13,6 +13,8 @@ def learner_message(messages):
 
 
 def route_for(query):
+    if word_question(query):return 'brief'
+    if re.search(r'\b(compare|contrast|analy[sz]e|evaluate|critique|why)\b',query,re.I):return 'deep'
     if re.search(r'深入|详细|仔细|(?:用|做|apply|use).*IRAC|IRAC.*(?:分析|analysis)|essay|performance test|批改|评分|案例|案情|为什么|比较|分析.*事实',query,re.I) or len(query)>300:return 'deep'
     if re.fullmatch(r'(?:请|帮我)?(?:读|念|显示|查)(?:一下)?(?:当前|这段|教材)(?:的)?(?:原文|内容)?[。！？?\s]*',query):return 'source'
     return 'brief'
@@ -25,7 +27,7 @@ def local_reply(messages,directory,today=None):
             data=json.loads(last.split('<reading_data>\n',1)[1].split('\n</reading_data>',1)[0])
             if route_for(query)=='source' and data.get('passage'):
                 return '当前阅读原文（'+data.get('location','')+'）：\n'+data['passage'][:6000]
-            word=word_question(query)
+            word=reading_lexeme(last,query)
             if word:
                 for v in data.get('saved_vocabulary',[]):
                     if v.get('term','').strip().casefold()==word.casefold():
@@ -59,18 +61,29 @@ def word_question(query):
     return None
 
 
+def reading_lexeme(last,query):
+    word=word_question(query)
+    if word:return word
+    try:
+        data=json.loads(last.split('<reading_data>\n',1)[1].split('\n</reading_data>',1)[0])
+        selected=data.get('passage','').strip()
+        if re.fullmatch(r'[A-Za-z][A-Za-z\-]{1,35}',selected) and re.fullmatch(r'(?:请)?(?:解释|翻译)(?:一下)?(?:这个|当前|选中的)?(?:词|单词)|(?:这个|当前|选中的)(?:词|单词)(?:是)?什么意思[？?。\s]*|what does this word mean[?\s]*',query,re.I):return selected
+    except (ValueError,IndexError,KeyError,TypeError):pass
+    return None
+
+
 async def cached_events(messages,model,connection,producer,directory):
     """Cache only successful, short lexical explanations in the same passage."""
     import hashlib
     import sqlite3
     from contextlib import closing
     last,query=learner_message(messages);key=None;path=Path(directory)/'lexical-cache.sqlite3'
-    if last.startswith('Current reading session:') and word_question(query):
+    if last.startswith('Current reading session:') and reading_lexeme(last,query):
         try:
             data=json.loads(last.split('<reading_data>\n',1)[1].split('\n</reading_data>',1)[0])
             context={k:data.get(k) for k in ('title','author','location','passage','language','material_excerpts')}
             identity={k:connection.get(k) for k in ('provider','api_configs')}
-            raw=json.dumps([model,identity,query.casefold(),context,'lexical-v1'],sort_keys=True,ensure_ascii=False)
+            raw=json.dumps([model,identity,reading_lexeme(last,query).casefold(),context,'lexical-v2'],sort_keys=True,ensure_ascii=False)
             key=hashlib.sha256(raw.encode()).hexdigest()
             path.parent.mkdir(parents=True,exist_ok=True)
             with closing(sqlite3.connect(path)) as c, c:
@@ -103,9 +116,31 @@ def prepare_messages(messages):
         if m.get('role') in ('system','developer'):result.append(dict(m));continue
         if i not in keep:continue
         content=m.get('content','')
+        if i==latest and reading and mode!='deep' and reading_lexeme(last,query):
+            try:
+                header,rest=content.split('<reading_data>\n',1)
+                raw,tail=rest.split('\n</reading_data>',1);data=json.loads(raw)
+                term=reading_lexeme(last,query).lower()
+                def focus(text,limit):
+                    pos=text.lower().find(term);start=max(0,pos-limit//3) if pos>=0 else 0
+                    return text[start:start+limit]
+                data['passage']=focus(data.get('passage',''),1400)
+                data['material_excerpts']=[{k:(focus(v,700) if k=='text' else v) for k,v in s.items()} for s in data.get('material_excerpts',[])[:2]]
+                data['recent_dialogue']=[{**t,'text':t.get('text','')[:350]} for t in data.get('recent_dialogue',[])[-2:]]
+                data['learning_notes']=[{**n,'text':n.get('text','')[:400]} for n in data.get('learning_notes',[])[:1]]
+                content=header+'<reading_data>\n'+json.dumps(data,ensure_ascii=False)+'\n</reading_data>'+tail
+            except (ValueError,IndexError,TypeError,KeyError):pass
         if i!=latest and isinstance(content,str) and content.startswith(('Current study task:','Current reading session:')) and 'Learner message: ' in content:content=content.rsplit('Learner message: ',1)[1]
         result.append({**m,'content':content})
     instruction=('Answer one idea at a time, about 40-80 words. Give the direct explanation first; ask at most one short follow-up. Do not rush uncertain legal conclusions.' if mode!='deep' else 'Use careful source-based legal analysis. Explain the issue, applicable rule, factual application and conclusion; distinguish uncertainty and jurisdiction. Detailed feedback is requested, but avoid unrelated topics.')
     if reading:instruction=('Be a subject-independent reading companion. Answer the current question directly and briefly; use the current book/passage. Offer one helpful application or analogy if appropriate. Ask at most one follow-up. Do not invent book quotations or reading achievements.' if mode!='deep' else 'Analyze the reader question carefully against the supplied passage. Distinguish the author argument, your interpretation, and your extension examples. Explain uncertainty, avoid unrelated exam coaching, and ask at most one follow-up.')
     result.insert(0,{'role':'system','content':instruction})
     return result,mode
+
+
+def reasoning_options(model,mode):
+    # Explicit allowlist from current official Responses documentation. Do not
+    # impose OpenAI-only parameters on third-party compatibility endpoints.
+    if model.startswith(('gpt-6.1-sol','gpt-6-sol','gpt-6-luna','gpt-6-astra')):
+        return {'effort':'high' if mode=='deep' else 'low'}
+    return None

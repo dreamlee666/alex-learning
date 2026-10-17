@@ -244,7 +244,13 @@ def memory(store,query,bid):
                 WHERE workspace_search MATCH ? AND (n.book_id=? OR n.book_id='') ORDER BY rank LIMIT 3''',
                 (' OR '.join('"'+t+'"' for t in terms),bid)).fetchall()
         except sqlite3.OperationalError:return []
-    return [{'note':r['path'],'text':r['text'][:1800],'label':'个人笔记或AI交流记录，非教材或法律依据'} for r in rows]
+    results=[{'note':r['path'],'text':r['text'][:1800],'label':'个人笔记或AI交流记录，非教材或法律依据'} for r in rows]
+    from .semantic import search
+    try:dense=search(store,query,[bid] if bid else None,kind='note',limit=3)
+    except Exception:dense=[]
+    for d in dense:
+        if not any(n['note']==d['id'] for n in results):results.append({'note':d['id'],'text':d['text'],'label':'语义匹配的个人笔记或AI记录，非教材或法律依据'})
+    return results[:3] if results else results
 
 
 def review_candidates(store,sid):
@@ -378,11 +384,18 @@ def install(app,store,check_action,events,connection):
     @app.post('/study/workspace/sync')
     async def sync(request:Request):
         check_action(request)
-        async with lock:return await run(export_vault,store)
+        async with lock:
+            result=await run(export_vault,store)
+            from .semantic import installed
+            if installed(store) and hasattr(app.state,'semantic_schedule'):app.state.semantic_schedule(None,True)
+            return result
 
     @app.post('/study/workspace/index')
     async def index(request:Request):
-        check_action(request);return {'indexed_notes':await run(index_vault,store)}
+        check_action(request);count=await run(index_vault,store)
+        from .semantic import installed
+        if installed(store) and hasattr(app.state,'semantic_schedule'):app.state.semantic_schedule(None,True)
+        return {'indexed_notes':count}
 
     @app.get('/study/workspace/search')
     async def search(q:str='',book_id:str=''):return {'notes':await run(memory,store,q[:2000],book_id)}

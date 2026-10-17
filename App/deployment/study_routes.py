@@ -21,6 +21,10 @@ def install_study_routes(app, check_action, csrf, response_events, load_connecti
     install_reading(app, store, check_action, response_events, load_connection)
     from .workspace import install as install_workspace
     install_workspace(app, store, check_action, response_events, load_connection)
+    from .adaptive import install as install_adaptive
+    install_adaptive(app,store,check_action,response_events,load_connection)
+    from .semantic import install as install_semantic
+    app.state.semantic_schedule=install_semantic(app,store,check_action)
     wake = asyncio.Event()
     worker = None
     stopping = False

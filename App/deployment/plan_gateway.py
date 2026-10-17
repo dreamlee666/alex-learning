@@ -176,7 +176,7 @@ async def home():
 async def status():
     connection = load_connection()
     provider = connection.get('provider', 'chatgpt')
-    return {'app': 'sqe-english-tutor', 'package_instance': json.loads(RUNTIME.read_text(encoding='utf-8'))['package_instance'], 'version': '0.5.0', 'connected': bool(connection.get('access_token')) if provider == 'chatgpt' else bool(connection.get('api_configs', {}).get(provider)), 'provider': provider, 'plan_enabled': plan_enabled(connection),
+    return {'app': 'sqe-english-tutor', 'package_instance': json.loads(RUNTIME.read_text(encoding='utf-8'))['package_instance'], 'version': '0.6.0', 'connected': bool(connection.get('access_token')) if provider == 'chatgpt' else bool(connection.get('api_configs', {}).get(provider)), 'provider': provider, 'plan_enabled': plan_enabled(connection),
             'email': connection.get('email', ''), 'model': connection.get('model', ''),
             'tested': connection.get('tested', False)}
 
@@ -391,6 +391,9 @@ async def uncached_response_events(messages, model):
     token = await access_token()
     instructions, inputs = convert_messages(messages)
     payload = {'model': model, 'input': inputs, 'instructions': instructions, 'store': False, 'stream': True}
+    from deployment.response_router import reasoning_options
+    reasoning=reasoning_options(model,response_mode)
+    if reasoning:payload['reasoning']=reasoning
     completed = False
     async with inference_lock:
         async with openai_client(timeout=httpx.Timeout(180, connect=20)) as client:

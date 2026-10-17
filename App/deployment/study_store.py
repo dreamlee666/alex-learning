@@ -230,7 +230,8 @@ class StudyStore(LearningMixin):
     def retrieve(self, query, book_ids=None, limit=4):
         terms = [t for t in dict.fromkeys(tokens(query).split()) if t not in RETRIEVAL_STOP][:24]
         if not terms:
-            return []
+            from .semantic import hybrid
+            return hybrid(self,query,[],book_ids,min(8,limit))
         match = ' OR '.join('"' + t + '"' for t in terms)
         with self.connect() as c:
             sql = 'SELECT c.*,b.name book FROM search s JOIN chunks c ON c.id=s.id JOIN books b ON b.id=c.book_id WHERE search MATCH ?'
@@ -240,7 +241,9 @@ class StudyStore(LearningMixin):
                 args.extend(book_ids)
             sql += ' ORDER BY bm25(search) LIMIT ?'
             args.append(min(8, limit))
-            return [dict(r) for r in c.execute(sql, args)]
+            lexical=[dict(r) for r in c.execute(sql, args)]
+        from .semantic import hybrid
+        return hybrid(self,query,lexical,book_ids,min(8,limit))
 
     def create_plan(self, config):
         config = preferences(config)

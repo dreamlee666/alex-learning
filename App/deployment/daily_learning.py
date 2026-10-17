@@ -19,6 +19,8 @@ def detail(store,tid):
         if not row:return None
         previous=list(c.execute('SELECT r.data,r.day,r.passed FROM daily_results r JOIN tasks t ON r.task_id=t.id WHERE t.plan_id=(SELECT plan_id FROM tasks WHERE id=?) ORDER BY r.rowid DESC LIMIT 2',(tid,)))
     value=json.loads(row['data'])
+    from .adaptive import adapt_unit
+    value=adapt_unit(store,tid,value)
     value['recent_learning']=[{'day':r['day'],'passed':bool(r['passed']),'learner_english':json.loads(r['data']).get('english_output','')[:600],'learner_recall':json.loads(r['data']).get('legal_recall','')[:600],'problems':json.loads(r['data']).get('problems',[]),'label':'个人学习记录，不是法律依据'} for r in previous]
     return value
 
@@ -31,7 +33,7 @@ def overview(store,pid):
         current=next((u for u in units if u['status']!='done'),None)
         logs=list(c.execute('SELECT r.*,t.title FROM daily_results r JOIN tasks t ON r.task_id=t.id WHERE t.plan_id=? ORDER BY r.rowid DESC LIMIT 12',(pid,)))
     return {'enabled':True,'plan_id':pid,'total':len(units),'completed':sum(u['status']=='done' for u in units),
-            'current':({'task_id':current['id'],**json.loads(current['data'])} if current else None),
+            'current':({'task_id':current['id'],**detail(store,current['id'])} if current else None),
             'history':[{'id':r['id'],'task_id':r['task_id'],'day':r['day'],'passed':bool(r['passed']),'title':r['title'],'data':json.loads(r['data'])} for r in logs],
             'config':plan['config']}
 

@@ -23,7 +23,7 @@
   const actions=el('div',undefined,'pdf-toolbar');
   async function selectedContext(){if(!pendingSelection)throw Error('请先在当前 PDF 页中选择文字。');await reading.setPage(page,pendingSelection.quote)}
   actions.append(button('高亮 / 保存批注',async()=>{if(!pendingSelection)throw Error('请先选择文字。');await api('annotation',{session_id:sid,page,...pendingSelection,note:note.value});note.value='';await showPage(page,false);status.textContent='批注已保存，重开仍可查看。'}),
-    button('解释选段',async()=>{await selectedContext();await reading.ask('请解释我选中的原文，先用简单语言说明，再给一个例子。')}),
+    button('解释选段',async()=>{await selectedContext();await reading.ask(/^[a-zA-Z][a-zA-Z-]{1,35}$/.test(pendingSelection.quote)?pendingSelection.quote+'是什么意思？':'请解释我选中的原文，先用简单语言说明，再给一个例子。')}),
     button('引导我理解',async()=>{await selectedContext();await reading.ask('请围绕我选中的原文进行苏格拉底式引导，一次只问一个问题，等我回答。')}),
     button('讲解本页',async()=>{await reading.setPage(page);await reading.ask('请简短讲解当前页最重要的一个概念，再让我用简单英语复述。')}),note);
   panel.append(el('h3','原文阅读 · 与老师同步'),toolbar,actions,status,stage);desk.prepend(panel);
@@ -77,7 +77,7 @@
       if(sid!==target)return;total=pdf.numPages;const saved=await api('position/'+sid);await showPage(Math.min(saved.page,total),data.status==='active');
     }catch(e){status.textContent='PDF 未打开：'+e.message+'。仍可使用下方文本伴读。';}
   }
-  window.addEventListener('reading-selected',()=>{setupDetails.open=false;setupSummary.textContent='正在读：'+(reading.current?.title||'选择书籍')+' · 展开设置';loadDocument().catch(e=>room.notice(e.message));candidates.replaceChildren()});
+  window.addEventListener('reading-selected',()=>{setupDetails.open=false;setupSummary.textContent='正在读：'+(reading.current?.title||'选择书籍')+' · 展开设置';loadDocument().catch(e=>room.notice(e.message));candidates.replaceChildren();semanticResults.replaceChildren();results.replaceChildren()});
   const workflow=el('section',undefined,'learning-panel workspace-workflow');workflow.append(el('h3','阅读 → 回忆 → 每日学习'));
   const candidates=el('div'),reviewState=el('p','先整理本次阅读，再选择核对过的问题与词句加入当前课程复习。','muted');
   workflow.append(reviewState,button('检查本次复习内容',async()=>{if(!reading.sessionId)throw Error('请先开始伴读。');const data=await api('review-candidates/'+reading.sessionId);candidates.replaceChildren();for(const item of data.items){const row=el('label',undefined,'workspace-review-item'),check=el('input');check.type='checkbox';check.value=item.key;check.disabled=item.added;check.checked=false;row.append(check,el('span',item.question+(item.added?' · 已加入':'')),el('small',item.answer+'\n'+item.label));candidates.append(row)}if(!data.items.length)candidates.append(el('p','这次整理没有可用复习内容。'))}),candidates,
@@ -99,6 +99,14 @@
   notes.append(vault,button('使用这个学习笔记仓库',async()=>{await api('vault',{path:vault.value});notesStatus.textContent='仓库已连接并建立本机关键词索引。'}),button('立即同步笔记',syncNotes),button('重新索引我修改的笔记',async()=>{const r=await api('index',{});notesStatus.textContent='已索引 '+r.indexed_notes+' 篇笔记。'}),autoLabel,notesStatus,query,
     button('查找',async()=>{const r=await api('search?q='+encodeURIComponent(query.value)+'&book_id='+encodeURIComponent(reading.current?.book_id||''));results.replaceChildren();for(const n of r.notes){const p=el('article');p.append(el('strong',n.note),el('p',n.text,'learning-copy'),el('small',n.label));results.append(p)}if(!r.notes.length)results.append(el('p','没有匹配笔记，试试原文关键词。'))}),results,backup,el('p','备份包含私人教材和学习记录，仅供自己保存；不会包含模型凭据。','muted'));
   assessment.after(notes);
+  const knowledge=el('section',undefined,'learning-panel');knowledge.append(el('h3','本机语义知识库 · 中英互查'));
+  const knowledgeStatus=el('p','正在检查本机索引…','muted'),semanticQuery=el('input'),semanticResults=el('div');semanticQuery.setAttribute('aria-label','语义知识库问题');semanticQuery.placeholder='可以用中文查英文教材，例如：承诺何时生效';
+  async function semanticStatus(){const s=await room.api('/study/semantic/status'),j=s.job;knowledgeStatus.textContent=s.model+' · 教材向量 '+(s.vectors.material||0)+'，笔记向量 '+(s.vectors.note||0)+'。'+({idle:'尚未建立索引。',starting:'正在准备…',downloading:'正在下载并校验约135MB模型…',indexing:`后台建立索引 ${j.done||0}/${j.total||0}；已有部分可查询。`,ready:'索引已就绪。',paused:'任务已暂停，下次复用已完成部分。',error:'索引未完成：'+j.error}[j.state]||j.state);return s}
+  async function startSemantic(scope){const r=await room.api('/study/semantic/index',{scope,book_id:reading.current?.book_id||''});await semanticStatus();room.notice(r.started?'语义索引已在后台开始；教材在本机处理。':'已有本机索引任务正在进行，继续复用。')}
+  knowledge.append(knowledgeStatus,button('索引当前教材和笔记',()=>startSemantic('selected')),button('索引全部书架',()=>startSemantic('all')),button('刷新索引状态',semanticStatus),el('p','首次下载公共模型，随后本机计算；关键词与语义结合。修改笔记后重新索引。检索结果是相关材料，不代表答案正确。','muted'),semanticQuery,
+    button('按意思查找教材',async()=>{const r=await room.api('/study/semantic/search?q='+encodeURIComponent(semanticQuery.value)+'&book_id='+encodeURIComponent(reading.current?.book_id||''));semanticResults.replaceChildren(el('p','检索用时 '+r.elapsed_ms+' ms；范围为当前关联教材。','muted'));for(const s of r.sources){const row=el('article',undefined,'reading-source');row.append(el('strong',s.book+' · '+s.location),el('p',s.text),el('small',(s.retrieval==='semantic'?'语义匹配':'关键词匹配')+' · ['+s.id+']'));semanticResults.append(row)}if(!r.sources.length)semanticResults.append(el('p','没有找到相关原文；可以换一种说法或建立索引。'))}),semanticResults);
+  notes.after(knowledge);semanticStatus().catch(e=>{knowledgeStatus.textContent=e.message});
+  setInterval(()=>{if(reading.active)semanticStatus().catch(()=>{})},5000);
   const previousTeacher=reading.onTeacher.bind(reading);
   reading.onTeacher=d=>{previousTeacher(d);if(reading.active&&autoSync.checked&&['conversation-chain-end','interrupted'].includes(d.event))setTimeout(()=>syncNotes().catch(e=>{notesStatus.textContent='自动同步未完成：'+e.message+'。原始对话仍保存在课堂。'}),900)};
   api('status').then(s=>{vault.value=s.vault;notesStatus.textContent='本机已索引 '+s.indexed_notes+' 篇笔记。'}).catch(e=>room.notice(e.message));

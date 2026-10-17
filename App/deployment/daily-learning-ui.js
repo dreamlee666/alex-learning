@@ -21,6 +21,7 @@
     if(!u){section.append(node('h3','已完成本轮路线，请核对目标考期、现行范围与完整考试日模拟，再决定报考。'));return}
     banner.append(node('strong',`今日路线：第${u.ordinal}学习日 · ${u.topic}`),node('p',u.blocks.filter(b=>b.minutes).map(b=>`${b.minutes}分钟${b.title}`).join(' → ')),button('回到今日任务与记录',()=>room.view('daily')));
     section.append(node('h3',`第${u.ordinal}学习日 · 第${u.week}周第${u.day_in_week}日 · ${u.topic}`),node('p',u.phase+' / '+u.theme),node('p','材料：'+u.reading_references.join('；'),'muted'));
+    if(u.adaptation){const a=u.adaptation,e=a.evidence;section.append(node('p','今日调整依据：'+a.reasons.join('；')+` 近期独立复习卡 ${e.distinct_review_cards} 张，选择题 ${e.quiz_attempts} 道，英语诊断 ${e.diagnostics} 次。`,'daily-note'),node('p',a.label,'muted'))}
     const todayDone=data.history.some(r=>r.passed&&r.day===localDate());if(todayDone)section.append(node('p','今天已有完成记录。下面是下一组任务，可明天继续，也可自愿加练。','daily-note'));
     if(u.extra_time_notice)section.append(node('p',u.extra_time_notice,'daily-note'));
     const key='alex-daily-draft-'+u.task_id;let draft={};try{draft=JSON.parse(localStorage.getItem(key)||'{}')}catch{}
@@ -39,6 +40,8 @@
       }
     }
     const feedback=node('p',undefined,'daily-note');feedback.setAttribute('aria-live','polite');
+    const diagnostic=node('p',undefined,'learning-copy');diagnostic.setAttribute('aria-live','polite');
+    form.append(button('用这次产出检查内容与英语',async()=>{diagnostic.textContent='正在根据原文和你的真实产出诊断…';try{const data=await room.api('/study/adaptive/diagnostic',{task_id:u.task_id,english_output:inputs.english_output.value,legal_recall:inputs.legal_recall.value});const r=data.result;diagnostic.textContent='内容理解（AI建议）：'+r.content.feedback+'\n原话依据：'+r.content.evidence+'\n\n英语表达（AI建议）：'+r.english.feedback+'\n原话依据：'+r.english.evidence+'\n\n再试一次：'+r.retry+'\n\n下次打开本日任务时会按此证据重新分配60分钟；不会自动完成任务。'}catch(e){diagnostic.textContent='诊断未完成，原始产出仍保留。';throw e}}),diagnostic);
     form.append(button('保存学习记录并检查下一步',async()=>{if(room.isBusy())throw Error('请先结束对话或录音。');const metrics={};for(const [k,c] of Object.entries(inputs)){if(['english_output','legal_recall'].includes(k))continue;metrics[k]=c.type==='number'?Number(c.value):c.type==='checkbox'?c.checked:c.value}
       const result=await room.api('/study/daily/record',{task_id:u.task_id,date:localDate(),checks:Object.fromEntries(Object.entries(checks).map(([k,c])=>[k,c.checked])),english_output:inputs.english_output.value,legal_recall:inputs.legal_recall.value,metrics});feedback.textContent=result.message+'\n'+result.problems.join('\n');if(result.passed){localStorage.removeItem(key);room.notice('今日记录已保存。下一组任务可在下次学习继续。');await room.refresh()}else{room.notice(result.message);await load()}}),button('打开课后整理与复习',async()=>{await room.selectTask(u.task_id);$('open-afterclass').click()}),feedback);section.append(form);
     for(const h of data.history.filter(h=>!h.passed).slice(0,1))section.append(node('p','最近需要巩固：'+h.data.problems.join('；'),'daily-note'));

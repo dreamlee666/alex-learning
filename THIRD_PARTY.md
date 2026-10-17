@@ -19,3 +19,5 @@ This content uses sample data owned and copyrighted by Live2D Inc. The sample da
 
 
 PDF.js 6.2.108: Apache-2.0. License: App/deployment/vendor/pdfjs/LICENSE. Upstream: https://github.com/mozilla/pdf.js . The stylesheet retains only scoped text-layer rules.
+
+Optional local semantic retrieval downloads multilingual-e5-small ONNX INT8 (MIT) on demand; model weights are not bundled. Pinned source, revision and SHA256: App/deployment/semantic-model.json. Upstream: https://huggingface.co/Xenova/multilingual-e5-small and https://huggingface.co/intfloat/multilingual-e5-small .
