@@ -1,0 +1,13 @@
+{
+  "name": "pdfjs-dist",
+  "version": "6.2.108",
+  "source": "https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.2.108.tgz",
+  "license": "Apache-2.0",
+  "modifications": "Stylesheet reduced to scoped text-layer styles.",
+  "files": {
+    "LICENSE": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "pdf.mjs": "487bde1bcf89e041f791173d0509a1dc18d0feb6655d78395e1611f9da0de17d",
+    "pdf.worker.mjs": "1a7607f28cfbc63f0e4e0a41927c89f991e353e4f3fb4565ecfd621ac5975089",
+    "pdf_viewer.css": "e66450e2a9c06c9ddeb2f75c762247ea257aa4d8e50f6db2999accc52654e406"
+  }
+}

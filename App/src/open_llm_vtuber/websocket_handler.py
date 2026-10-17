@@ -567,14 +567,24 @@ class WebSocketHandler:
     async def _handle_study_settings(self, websocket, client_uid, data):
         context = self.client_contexts[client_uid]
         tid = data.get('task_id')
+        reading = data.get('reading') is True
+        reading_id = str(data.get('reading_id') or '')[:100] if reading else None
+        if reading_id:
+            from deployment.study_store import StudyStore
+            from deployment.reading import session
+            await asyncio.to_thread(session, StudyStore(), reading_id)
+        if reading:
+            tid = None
         plan_id = None
         if tid:
             from deployment.study_store import StudyStore
             task = await asyncio.to_thread(StudyStore().task, str(tid))
             plan_id = task['plan_id']
         previous_plan = getattr(context, 'study_plan_id', None)
-        companion = data.get('companion') is True
-        changed = plan_id != previous_plan or companion != getattr(context, 'companion_mode', False)
+        companion = data.get('companion') is True and not reading
+        changed = (plan_id != previous_plan or companion != getattr(context, 'companion_mode', False)
+                   or reading != getattr(context, 'reading_mode', False)
+                   or reading_id != getattr(context, 'reading_session_id', None))
         current = self.current_conversation_tasks.get(client_uid)
         if changed and current and not current.done():
             raise ValueError('请先结束当前回答，再切换课程。')
@@ -586,6 +596,8 @@ class WebSocketHandler:
         context.study_task_id = str(tid) if tid else None
         context.companion_mode = companion
         context.companion_context = str(data.get('companion_context', ''))[:16000] if companion else ''
+        context.reading_mode = reading
+        context.reading_session_id = reading_id
         await websocket.send_text(json.dumps({'type': 'study-ready', 'task_id': context.study_task_id, 'new_course': changed}))
 
     async def _prepare_review(self, websocket, client_uid, audio):

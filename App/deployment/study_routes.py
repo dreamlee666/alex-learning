@@ -11,10 +11,16 @@ from .teaching import teaching_instructions
 
 def install_study_routes(app, check_action, csrf, response_events, load_connection):
     store = StudyStore()
+    from .daily_learning import install as install_daily
+    install_daily(app, store, check_action)
     from .learning_routes import install_learning_routes
     install_learning_routes(app, store, check_action, response_events, load_connection)
     from .companion import install
     install(app, store, check_action, response_events, load_connection)
+    from .reading import install as install_reading
+    install_reading(app, store, check_action, response_events, load_connection)
+    from .workspace import install as install_workspace
+    install_workspace(app, store, check_action, response_events, load_connection)
     wake = asyncio.Event()
     worker = None
     stopping = False
@@ -50,14 +56,17 @@ def install_study_routes(app, check_action, csrf, response_events, load_connecti
 
     @app.get('/study/assets/{name}')
     async def asset(name: str):
-        if name not in ('study.js', 'study.css', 'voice-turn.js', 'learning-ui.js', 'import-queue.js', 'companion-ui.js'):
+        if name not in ('study.js', 'study.css', 'voice-turn.js', 'learning-ui.js', 'import-queue.js', 'companion-ui.js', 'daily-learning-ui.js', 'reading-ui.js', 'workspace-ui.js'):
             raise HTTPException(404)
         return Response((base / name).read_text(encoding='utf-8'), media_type='text/javascript' if name.endswith('.js') else 'text/css')
 
     @app.get('/study/state')
     async def state(plan_id: str = ''):
+        preferred = ''
+        try:preferred=json.loads((store.directory/'preferred-course.json').read_text(encoding='utf-8')).get('plan_id','')
+        except (OSError,ValueError):pass
         return {'books': await asyncio.to_thread(store.books), 'plan': await asyncio.to_thread(store.plan, plan_id or None),
-                'notes': await asyncio.to_thread(store.notes), 'courses': await asyncio.to_thread(store.courses)}
+                'notes': await asyncio.to_thread(store.notes), 'courses': await asyncio.to_thread(store.courses),'preferred_plan_id':preferred}
 
     @app.post('/study/import')
     async def import_books(request: Request):

@@ -38,6 +38,46 @@ class GatewayTests(unittest.TestCase):
     def test_missing_gateway_auth_rejected(self):
         self.assertEqual(self.client.post('/v1/chat/completions', json={}).status_code, 401)
 
+    def completion_request(self, stream=False):
+        return self.client.post('/v1/chat/completions',
+            headers={'Authorization': 'Bearer ' + gateway.LOCAL_KEY},
+            json={'messages': [{'role': 'user', 'content': 'Explain this sentence.'}],
+                  'stream': stream})
+
+    def test_nonstream_completion_is_sdk_compatible(self):
+        async def parts(*args):
+            yield 'Hello '
+            yield 'reader.'
+        with patch.object(gateway, 'load_connection', return_value={'model': 'test-model'}), \
+             patch.object(gateway, 'response_events', parts):
+            response = self.completion_request()
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['object'], 'chat.completion')
+        self.assertEqual(data['choices'][0]['message']['content'], 'Hello reader.')
+        self.assertNotIn('usage', data)
+
+    def test_nonstream_failure_does_not_return_partial_answer(self):
+        async def parts(*args):
+            yield 'partial'
+            raise HTTPException(502, 'upstream interrupted')
+        with patch.object(gateway, 'load_connection', return_value={'model': 'test-model'}), \
+             patch.object(gateway, 'response_events', parts):
+            response = self.completion_request()
+        self.assertEqual(response.status_code, 502)
+        self.assertNotIn('partial', response.text)
+
+    def test_stream_completion_remains_event_stream(self):
+        async def parts(*args):
+            yield 'Hello reader.'
+        with patch.object(gateway, 'load_connection', return_value={'model': 'test-model'}), \
+             patch.object(gateway, 'response_events', parts):
+            response = self.completion_request(stream=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('text/event-stream', response.headers['content-type'])
+        self.assertIn('Hello reader.', response.text)
+        self.assertIn('data: [DONE]', response.text)
+
     def test_network_failure_returns_json(self):
         with patch.object(gateway, 'access_token', AsyncMock(side_effect=httpx.ConnectTimeout('offline test'))):
             response = self.client.get('/models')

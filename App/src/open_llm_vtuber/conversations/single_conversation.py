@@ -50,6 +50,9 @@ async def process_single_conversation(
     full_response = ""  # Initialize full_response here
     source_ids = None
     study_tid = getattr(context, 'study_task_id', None)
+    reading_id = getattr(context, 'reading_session_id', None) if getattr(context, 'reading_mode', False) else None
+    reading_exchange = None
+    reading_response_state = 'complete'
 
     try:
         # Send initial signals
@@ -62,12 +65,21 @@ async def process_single_conversation(
         )
 
         model_input = input_text
-        if getattr(context, 'companion_mode', False):
+        if getattr(context, 'reading_mode', False):
+            if not reading_id:
+                raise ValueError('请先在读书伴读填写书名，开始一次伴读。')
+            from deployment.study_store import StudyStore
+            from deployment.reading import reading_context, begin_turn, finish_turn
+            model_input, snapshot = await asyncio.to_thread(reading_context, StudyStore(), reading_id, input_text)
+            reading_exchange = await asyncio.to_thread(begin_turn, StudyStore(), reading_id, input_text, snapshot)
+            await websocket_send(json.dumps({'type':'reading-sources','sources':snapshot['sources']}, ensure_ascii=False))
+            source_ids = {s['id'] for s in snapshot['sources']}
+        elif getattr(context, 'companion_mode', False):
             from deployment.stellaris_library import game_context
             from deployment.study_store import DATA
             model_input = await asyncio.to_thread(game_context, DATA, input_text,
                                                   getattr(context, 'companion_context', ''))
-        if study_tid:
+        if study_tid and not getattr(context, 'reading_mode', False):
             from deployment.study_store import StudyStore, lesson_context
             model_input, board = await asyncio.to_thread(
                 lesson_context, StudyStore(), study_tid, input_text)
@@ -143,6 +155,7 @@ async def process_single_conversation(
                     logger.debug(f"Unexpected item content: {output_item}")
 
         except Exception as e:
+            reading_response_state = 'error'
             logger.exception(
                 f"Error processing agent response stream: {e}"
             )  # Log with stack trace
@@ -162,6 +175,10 @@ async def process_single_conversation(
             await asyncio.gather(*tts_manager.task_list)
             await websocket_send(json.dumps({"type": "backend-synth-complete"}))
 
+        if reading_exchange:
+            await asyncio.to_thread(finish_turn, StudyStore(), reading_id, reading_exchange, full_response, reading_response_state)
+            reading_exchange = None
+
         await finalize_conversation_turn(
             tts_manager=tts_manager,
             websocket_send=websocket_send,
@@ -179,14 +196,18 @@ async def process_single_conversation(
             )
             logger.info(f"AI response: {full_response}")
 
-        if study_tid and full_response:
+        if study_tid and full_response and not getattr(context, 'reading_mode', False):
             await asyncio.to_thread(StudyStore().record_turn, study_tid, 'assistant', full_response)
         return full_response  # Return accumulated full_response
 
     except asyncio.CancelledError:
+        if reading_exchange:
+            await asyncio.to_thread(finish_turn, StudyStore(), reading_id, reading_exchange, full_response, 'interrupted')
         logger.info(f"🤡👍 Conversation {session_emoji} cancelled because interrupted.")
         raise
     except Exception as e:
+        if reading_exchange:
+            await asyncio.to_thread(finish_turn, StudyStore(), reading_id, reading_exchange, full_response, 'error')
         logger.error(f"Error in conversation chain: {e}")
         await websocket_send(
             json.dumps({"type": "error", "message": f"Conversation error: {str(e)}"})

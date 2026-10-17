@@ -17,7 +17,7 @@ import zipfile
 
 SOURCE = Path(__file__).resolve().parents[2]
 PACKAGING = Path(__file__).resolve().parent
-VERSION = '0.4.1'
+VERSION = '0.5.0'
 NAME = 'Alex-Learning'
 BASE_PYTHON = Path(sys.base_prefix)
 RELEASE = SOURCE.parent / 'release'
@@ -144,10 +144,11 @@ def build(continue_build=False):
         shutil.copyfile(SOURCE / name, APP / name)
     dep = APP / 'deployment'
     dep.mkdir(exist_ok=True)
-    for name in ('stellaris_library.py', 'STELLARIS-GUIDE.md', 'companion.py', 'companion-ui.js', 'speech_text.py', 'COMPANION-GUIDE.md', 'IMPORT-GUIDE.md', 'providers.py', 'learning.py', 'learning_routes.py', 'learning-ui.js', 'LEARNING-REFERENCES.md', 'teaching.py', 'configure.py', 'launch_tutor.py', 'plan_gateway.py', 'voice_server.py', 'study_store.py', 'study_routes.py',
+    for name in ('workspace.py', 'workspace-ui.js', 'WORKSPACE-GUIDE.md', 'reading_voice.py', 'reading.py', 'reading-ui.js', 'READING-GUIDE.md', 'daily_learning.py', 'daily-learning-ui.js', 'response_router.py', 'stellaris_library.py', 'STELLARIS-GUIDE.md', 'companion.py', 'companion-ui.js', 'speech_text.py', 'COMPANION-GUIDE.md', 'IMPORT-GUIDE.md', 'providers.py', 'learning.py', 'learning_routes.py', 'learning-ui.js', 'LEARNING-REFERENCES.md', 'teaching.py', 'configure.py', 'launch_tutor.py', 'plan_gateway.py', 'voice_server.py', 'study_store.py', 'study_routes.py',
                  'study.html', 'study.js', 'import-queue.js', 'voice-turn.js', 'study.css', 'settings.html', 'voice-profile.json',
                  'installed-requirements.txt', 'voice-requirements.txt', 'study-requirements.txt', 'asr-model-provenance.json'):
         shutil.copyfile(SOURCE / 'deployment' / name, dep / name)
+    copy_tree(SOURCE / 'deployment/vendor/pdfjs', dep / 'vendor/pdfjs')
     copy_tree(SOURCE / 'models' / 'kokoro', APP / 'models' / 'kokoro')
     snapshot = SOURCE / 'models' / 'whisper' / 'models--Systran--faster-whisper-small' / 'snapshots' / '536b0662742c02347bc0e980a01041f333bce120'
     copy_tree(snapshot, APP / 'models' / 'whisper-small')

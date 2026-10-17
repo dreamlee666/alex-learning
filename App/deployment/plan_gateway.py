@@ -38,7 +38,7 @@ LOCAL_KEY = json.loads(RUNTIME.read_text(encoding='utf-8'))['gateway_key']
 CSRF = secrets.token_urlsafe(32)
 pending = {}
 refresh_lock = asyncio.Lock()
-inference_lock = asyncio.Lock()
+inference_lock = asyncio.Semaphore(2)
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 
@@ -176,7 +176,7 @@ async def home():
 async def status():
     connection = load_connection()
     provider = connection.get('provider', 'chatgpt')
-    return {'app': 'sqe-english-tutor', 'package_instance': json.loads(RUNTIME.read_text(encoding='utf-8'))['package_instance'], 'version': '0.4.1', 'connected': bool(connection.get('access_token')) if provider == 'chatgpt' else bool(connection.get('api_configs', {}).get(provider)), 'provider': provider, 'plan_enabled': plan_enabled(connection),
+    return {'app': 'sqe-english-tutor', 'package_instance': json.loads(RUNTIME.read_text(encoding='utf-8'))['package_instance'], 'version': '0.5.0', 'connected': bool(connection.get('access_token')) if provider == 'chatgpt' else bool(connection.get('api_configs', {}).get(provider)), 'provider': provider, 'plan_enabled': plan_enabled(connection),
             'email': connection.get('email', ''), 'model': connection.get('model', ''),
             'tested': connection.get('tested', False)}
 
@@ -352,6 +352,8 @@ def convert_messages(messages):
         if isinstance(content, list):
             if not all(isinstance(part, dict) and part.get('type') in ('text', 'input_text')
                        and isinstance(part.get('text'), str) for part in content):
+                if any(isinstance(part, dict) and part.get('type') in ('image_url', 'input_image') for part in content):
+                    raise HTTPException(400, 'Image input is not supported by this text-only classroom gateway.')
                 raise HTTPException(400, 'This classroom gateway accepts text only.')
             content = '\n'.join(part['text'] for part in content)
         if not isinstance(content, str):
@@ -365,7 +367,15 @@ def convert_messages(messages):
     return '\n\n'.join(instructions), inputs
 
 
-async def response_events(messages, model):
+async def uncached_response_events(messages, model):
+    from deployment.response_router import local_reply, prepare_messages
+    instructions, inputs = convert_messages(messages)
+    messages = ([{'role': 'system', 'content': instructions}] if instructions else []) + inputs
+    immediate = local_reply(messages, DATA / 'study')
+    if immediate is not None:
+        yield immediate
+        return
+    messages, response_mode = prepare_messages(messages)
     connection = load_connection()
     provider = connection.get('provider', 'chatgpt')
     if provider != 'chatgpt':
@@ -405,6 +415,12 @@ async def response_events(messages, model):
         raise HTTPException(502, '回答连接中断，未收到完成确认。')
 
 
+async def response_events(messages, model):
+    from deployment.response_router import cached_events
+    async for part in cached_events(messages, model, load_connection(), uncached_response_events, DATA / 'study'):
+        yield part
+
+
 from deployment.study_routes import install_study_routes
 install_study_routes(app, check_action, CSRF, response_events, load_connection)
 
@@ -431,16 +447,23 @@ async def completion(request: Request):
         raise HTTPException(401, 'Local gateway authorization required')
     body = await request.json()
     if body.get('tools'):
-        raise HTTPException(400, 'Tools are disabled for this classroom.')
+        raise HTTPException(400, 'Tools are not supported by this classroom.')
     connection = load_connection()
-    if connection.get('provider', 'chatgpt') == 'chatgpt':
-        await access_token()
     model = connection.get('model')
     if not model:
         raise HTTPException(400, '请先在本地设置页面选择模型。')
     messages = body.get('messages', [])
     convert_messages(messages)
     ident = 'chatcmpl-' + uuid.uuid4().hex
+    # Reading clients and standard SDK probes also use non-streaming calls.
+    # Collect the same verified upstream stream so failures cannot look like
+    # successful partial answers, and never invent token-usage counters.
+    if not body.get('stream', False):
+        parts = [part async for part in response_events(messages, model)]
+        return JSONResponse({'id': ident, 'object': 'chat.completion',
+            'created': int(time.time()), 'model': model,
+            'choices': [{'index': 0, 'message': {'role': 'assistant',
+                'content': ''.join(parts)}, 'finish_reason': 'stop'}]})
     async def stream():
         def encode(delta, finish=None):
             return 'data: ' + json.dumps({'id': ident, 'object': 'chat.completion.chunk', 'created': int(time.time()),
@@ -456,3 +479,7 @@ async def completion(request: Request):
         except Exception:
             yield 'data: ' + json.dumps({'error': {'message': '模型连接失败，请检查网络并重试。', 'type': 'gateway_error'}}) + '\n\n'
     return StreamingResponse(stream(), media_type='text/event-stream')
+
+
+from deployment.reading_voice import install as install_reading_voice
+install_reading_voice(app, LOCAL_KEY, ROOT, voice_request)

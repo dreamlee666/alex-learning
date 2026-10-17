@@ -24,6 +24,7 @@ OCR_LOCK = threading.Lock()
 OCR_ENGINE = None
 MAX_BYTES = 50 * 1024 * 1024
 EXTENSIONS = {'.pdf', '.docx', '.txt', '.md'}
+RETRIEVAL_STOP = set('a an the is are was were what how why which please explain define does do of to in on and or it this that me tell'.split())
 
 
 def tokens(text):
@@ -227,7 +228,7 @@ class StudyStore(LearningMixin):
             return [dict(r) for r in c.execute('SELECT c.*,b.name book FROM chunks c JOIN books b ON b.id=c.book_id WHERE book_id=? ORDER BY ordinal LIMIT 30 OFFSET ?', (book_id, max(0, offset)))]
 
     def retrieve(self, query, book_ids=None, limit=4):
-        terms = list(dict.fromkeys(tokens(query).split()))[:24]
+        terms = [t for t in dict.fromkeys(tokens(query).split()) if t not in RETRIEVAL_STOP][:24]
         if not terms:
             return []
         match = ' OR '.join('"' + t + '"' for t in terms)
@@ -310,6 +311,9 @@ class StudyStore(LearningMixin):
         return self.task_dict(row)
 
     def complete(self, tid, on, grade='good', note=''):
+        from .daily_learning import init, detail
+        init(self)
+        if detail(self,tid):raise ValueError('这节课属于每日 60 分钟计划，请在「今日任务」记录五个环节和周检后推进。')
         today = date.fromisoformat(on)
         if grade not in ('again', 'hard', 'good'):
             raise ValueError('未知复习结果。')
@@ -349,16 +353,26 @@ def lesson_context(store, task_id, query):
     selected = store.chunks(task['chunk_ids'])
     if not selected:
         raise ValueError('任务引用的教材片段不存在。')
-    book_ids = list(dict.fromkeys(s['book_id'] for s in selected))
-    extra = store.retrieve(query, book_ids, 3)
+    plan = store.plan(task['plan_id'])
+    book_ids = plan['config'].get('books') if plan else list(dict.fromkeys(s['book_id'] for s in selected))
+    if plan and plan['config'].get('daily_mastery'):
+        curriculum_ids={s['book_id'] for s in selected if s['book']=='CaliforniaBar_60分钟每日任务指南.md'}
+        book_ids=[bid for bid in book_ids if bid not in curriculum_ids]
+    extra = [] if query.startswith("Start ONLY today's activity:") else store.retrieve(query, book_ids, 3)
     sources = list({s['id']: s for s in selected + extra}.values())[:5]
     plan = store.plan(task['plan_id'])
     instructions = teaching_instructions(plan['config'] if plan else {})
+    if plan and plan['config'].get('daily_mastery'):
+        from .daily_learning import detail
+        daily = detail(store,task_id)
+        if daily:
+            instructions += '\nDAILY SESSION: ' + json.dumps(daily,ensure_ascii=False)[:7000]
+            instructions += '\nFollow the learner-selected block of this daily session; do not attempt all 60 minutes in one reply. Begin with recall or the requested activity. Ask ONE question and wait. Do not assert that time has elapsed, work was completed, a checkpoint was passed, or the schedule was advanced unless actual saved data supports it. Record/advance happens in the daily panel, not through a spoken claim. Read one short supplied English sentence aloud, explain difficult words/structure in Chinese, then invite a short English attempt. Correct legal understanding separately from English expression, at most two language points per turn; allow Chinese scaffolding and let the learner retry. Never assess pronunciation from transcript only.'
     try:
         from .companion import prepared
         unit = prepared(store, task_id, False)
         if unit['pack'] and not unit.get('stale'):
-            instructions += '\nPrepared lesson guidance (AI draft, verify against original sources): ' + json.dumps({k:unit['pack'][k] for k in ('objectives','concepts','terms','outline')}, ensure_ascii=False)[:16000]
+            instructions += '\nPrepared lesson guidance (AI draft, verify against original sources): ' + json.dumps({k:unit['pack'][k] for k in ('objectives','concepts','terms','outline')}, ensure_ascii=False)[:4000]
     except sqlite3.OperationalError:
         pass  # Older/direct stores have no optional prepared-unit tables.
     citations = '\n\n'.join(f"[{s['id']}] {s['book']} · {s['location']} ({s['method']})\n{s['text']}" for s in sources)

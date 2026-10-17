@@ -16,3 +16,6 @@ Live2D 官方条款：[素材许可](https://www.live2d.com/eula/live2d-free-mat
 This content uses sample data owned and copyrighted by Live2D Inc. The sample data are utilized in accordance with terms and conditions set by Live2D Inc. This content itself is created at the author's sole discretion.
 
 没有重新分发 Mao 原有音频。本项目不是 Live2D、Neuro-sama、SRA 或任一模型服务的官方产品。
+
+
+PDF.js 6.2.108: Apache-2.0. License: App/deployment/vendor/pdfjs/LICENSE. Upstream: https://github.com/mozilla/pdf.js . The stylesheet retains only scoped text-layer rules.

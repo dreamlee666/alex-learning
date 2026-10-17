@@ -127,6 +127,9 @@ class VoiceEngine:
 
 engine = None
 speech_lock = asyncio.Lock()
+from collections import OrderedDict
+speech_cache = OrderedDict()
+speech_cache_bytes = 0
 
 
 @asynccontextmanager
@@ -166,13 +169,26 @@ async def profile(value: VoiceProfile):
 
 @app.post('/v1/audio/speech')
 async def speech(value: SpeechRequest):
+    global speech_cache_bytes
     if value.model != MODEL_NAME or value.voice != VOICE_NAME or value.response_format != 'wav':
         raise HTTPException(400, 'Use the configured local model, voice and WAV format.')
     if engine is None:
         raise HTTPException(503, 'The local voice is still loading.')
     try:
         async with speech_lock:
-            audio = await asyncio.to_thread(engine.render, value.input, value.speed)
+            # Bounded memory only; changing pitch/speed/brightness invalidates the key.
+            cache_key = (value.input, value.speed, json.dumps(load_profile(), sort_keys=True))
+            audio = speech_cache.get(cache_key)
+            if audio is not None:
+                speech_cache.move_to_end(cache_key)
+            else:
+                audio = await asyncio.to_thread(engine.render, value.input, value.speed)
+                if len(audio) <= 4 * 1024 * 1024:
+                    speech_cache[cache_key] = audio
+                    speech_cache_bytes += len(audio)
+                    while len(speech_cache) > 128 or speech_cache_bytes > 32 * 1024 * 1024:
+                        _, removed = speech_cache.popitem(last=False)
+                        speech_cache_bytes -= len(removed)
         return Response(audio, media_type='audio/wav')
     except Exception:
         raise HTTPException(502, 'Speech generation failed. Chinese speech needs an Edge TTS connection.')

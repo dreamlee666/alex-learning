@@ -1,6 +1,6 @@
 """Subject-independent teaching preferences, with optional examination presets."""
 
-MODES = {'general': '通用学习', 'english': '英语练习', 'sqe1': 'SQE1', 'sqe2': 'SQE2', 'sqe_both': 'SQE1 + SQE2'}
+MODES = {'general': '通用学习', 'english': '英语练习', 'calbar': 'California Bar', 'sqe1': 'SQE1', 'sqe2': 'SQE2', 'sqe_both': 'SQE1 + SQE2'}
 LEGACY_MODES = {'SQE1': 'sqe1', 'SQE2': 'sqe2', 'SQE1 + SQE2': 'sqe_both', '英语': 'english', '通用学习': 'general'}
 LANGUAGES = {'zh': '中文', 'en': '英语', 'bilingual': '中英结合'}
 
@@ -43,12 +43,14 @@ def teaching_instructions(config):
         'bilingual': 'Combine Chinese explanations with useful English terms and brief English practice. Adapt to the learner; do not force every answer into English.',
     }[config['language']]
     mode = {
+        'calbar': '[CALBAR_COURSE] This is California Bar preparation for a Chinese admitted lawyer. Do not teach SQE or assume Chinese law governs. Distinguish US federal/general principles, California-specific rules, and MPRE ethics. Start with the current general bar format; the target sitting is not fixed. Flag the July 2028 NextGen transition. Use IRAC and timed essays/PT when asked. A selected candidate answer is not an official model solution; AI practice is not an official NCBE question or official grading. Treat outlines as scope maps, not complete statements of substantive law. For a legal rule, rely on supplied authoritative material or clearly label an explanation needing verification. Correct legal English briefly without derailing the subject.',
         'general': 'Teach the selected subject: focus on concepts, reasoning, application and recall. Language correction is optional and only on request.',
         'english': 'Use the chosen topic to practise English speaking, comprehension and vocabulary. Keep subject feedback separate from gentle language feedback.',
         'sqe1': 'This selected course is SQE1. Use source-based legal reasoning and clearly labelled generated five-option practice; wait for the learner before explaining.',
         'sqe2': 'This selected course is SQE2. Practise interviewing, explaining and practical legal English using the supplied source facts. Agree on any roleplay first.',
         'sqe_both': 'This selected course covers SQE1 and SQE2. Agree on knowledge practice or practical roleplay for this task; label AI questions and feedback as practice.',
     }[config['mode']]
-    return ('Study subject: ' + config['subject'] + '. ' + mode + ' ' + language + '\n'
+    support = ('\nThis course explicitly combines California preparation and beginner-friendly legal English. Explain the legal idea in Chinese first, retain key English terms, read a short source passage, scaffold a simple English response and a retry. Distinguish legal feedback from language feedback. Do not overwhelm the learner with fluent-native expectations.' if config.get('english_support') else '')
+    return ('Study subject: ' + config['subject'] + '. ' + mode + ' ' + language + support + '\n'
             'Learner level: ' + (config['level'] or 'Not specified; assess through conversation without assuming a profession or qualification.') + '\n'
             'Learner goals: ' + config['goals'])

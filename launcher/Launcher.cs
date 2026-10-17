@@ -48,9 +48,11 @@ class ClassroomLauncher : Form {
         logs.Click += delegate { Open(Path.Combine(root,"App","deployment")); };Controls.Add(logs);
         var help = new LinkLabel {Text="使用说明与第三方许可", Left=28, Top=376, Width=270, Height=25};
         help.LinkClicked += delegate { Open(Path.Combine(root,"使用说明.html")); };Controls.Add(help);
-        Controls.Add(new Label {Text="免费分享版 · Windows x64 · v0.4.1", Left=328,Top=376,Width=310,Height=26,ForeColor=Color.DimGray});
+        Controls.Add(new Label {Text="免费分享版 · Windows x64 · v0.5.0", Left=328,Top=376,Width=310,Height=26,ForeColor=Color.DimGray});
         var game=new Button {Text="游戏伴读 / 快捷取词", Left=28, Top=425, Width=240, Height=38};
         game.Click += delegate {if(running){Open("http://127.0.0.1:32194/study?mode=game");Open(Path.Combine(root,"Alex-Game-Companion.exe"));}else MessageBox.Show("请先启动课堂。",Text);}; Controls.Add(game);
+        var reader=new Button {Text="文档伴读 / 学习笔记", Left=286, Top=425, Width=240, Height=38};
+        reader.Click += delegate {if(running)Open("http://127.0.0.1:32194/study?mode=reading");else MessageBox.Show("请先启动课堂。",Text);};Controls.Add(reader);
         Shown += delegate { Run("--start --open"); };
         FormClosing += OnClosing;
     }
