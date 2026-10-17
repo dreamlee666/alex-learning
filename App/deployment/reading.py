@@ -136,6 +136,10 @@ def reading_context(store, sid, question):
     from .workspace import memory
     payload['learning_notes'] = memory(store, question, data['book_id'])
     with store.connect() as c:
+        has_visual=c.execute("SELECT 1 FROM sqlite_master WHERE name='reading_visuals'").fetchone()
+        visual=c.execute('SELECT question,answer FROM reading_visuals WHERE session_id=? AND page=? ORDER BY rowid DESC LIMIT 1',(sid,position['page'])).fetchone() if has_visual and position else None
+    if visual:payload['current_page_visual']={**dict(visual),'answer':visual['answer'][:5000],'label':'Prior AI image interpretation; verify against original page, not authoritative source text.'}
+    with store.connect() as c:
         summary = c.execute('SELECT report FROM reading_summaries WHERE session_id=? ORDER BY watermark DESC,created DESC LIMIT 1',(sid,)).fetchone()
     payload['saved_vocabulary'] = json.loads(summary['report']).get('vocabulary',[])[:20] if summary else []
     instructions = '''Current reading session: [READING_COMPANION]

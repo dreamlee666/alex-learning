@@ -5,7 +5,7 @@
   const localDate = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   let state = {books:[],plan:null,notes:[]}, activeTask = localStorage.getItem('sqe-study-task'), connected=false, busy=false;
   let sources=[], speech=[], currentTask=null, reviewTicket=null, audioContext, stream, processor, recording=false, recordTimer;
-  let awaitingResponse=false, playbackActive=false, resumeNotBefore=0, reviewCancelled=false, captureFrames=[], preRoll=[], preRollLength=0, captureLength=0;
+  let awaitingResponse=false, playbackActive=false, resumeNotBefore=0, reviewCancelled=false, captureFrames=[], preRoll=[], preRollLength=0, captureLength=0, externalWork=false;
   const turnDetector=new VoiceTurnDetector();
   $('review-enabled').checked=localStorage.getItem('alex-review-enabled')==='true';
   $('continuous-enabled').checked=localStorage.getItem('alex-continuous-enabled')!=='false';
@@ -50,6 +50,7 @@
   }
   function context() {const game=window.extensionRoom?.gameMode,reading=window.readingRoom?.active;post('context',{task_id:game||reading?null:activeTask,review:$('review-enabled').checked,companion:!!game,companion_context:game?window.extensionRoom.getPassage():'',reading:!!reading,reading_id:reading?window.readingRoom.sessionId:''})}
   function view(name) {
+    if(externalWork){notice('正在处理当前文档，请完成后再切换。');return}
     if(window.readingRoom && window.readingRoom.active !== (name==='reading') && (busy||recording||reviewTicket)){notice('请先结束录音或回答，再切换读书伴读。');return}
     if(window.extensionRoom && window.extensionRoom.gameMode !== (name==='game') && (busy||recording||reviewTicket)){notice('请先结束录音或回答，再切换课堂与游戏伴读。');return}
     if(window.readingRoom?.active&&name!=='reading'){window.readingRoom.onView(name);window.extensionRoom?.onView(name)}
@@ -218,11 +219,12 @@
   $('review-confirm').onclick=action(()=>{const text=$('review-text').value.trim();if(!text)throw Error('请填写转写内容，或取消后重录。');reviewCancelled=false;post('confirm',{request_id:reviewTicket,text})});
   $('review-cancel').onclick=action(()=>{reviewCancelled=true;post('confirm',{request_id:reviewTicket,cancel:true})});
   let preparingInput=false;
-  $('send').onclick=action(async()=>{if(busy||recording||reviewTicket||preparingInput||awaitingResponse)throw Error('请先结束当前录音或回复。');const text=$('message').value.trim();if(!text)return;preparingInput=true;try{await window.readingRoom?.beforeSend();context();post('text',{text});awaitingResponse=true;if(window.readingRoom?.active)window.readingRoom.learner(text);else window.extensionRoom?.learner(text);$('message').value='';notice('')}finally{preparingInput=false}});
+  $('send').onclick=action(async()=>{if(externalWork||busy||recording||reviewTicket||preparingInput||awaitingResponse)throw Error('请先结束当前录音、回复或文档处理。');const text=$('message').value.trim();if(!text)return;preparingInput=true;try{await window.readingRoom?.beforeSend();context();post('text',{text});awaitingResponse=true;if(window.readingRoom?.active)window.readingRoom.learner(text);else window.extensionRoom?.learner(text);$('message').value='';notice('')}finally{preparingInput=false}});
   $('message').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();$('send').click()}});
   $('interrupt').onclick=action(()=>post('interrupt'));
   $('start-lesson').onclick=action(()=>{if(!activeTask){view('plan');throw Error('请先在每日计划选择一节课。')}if(busy||recording||reviewTicket)throw Error('请先结束当前录音或回答。');post('text',{text:currentTask?.kind==='review'?'Start a recall review of this material. Ask me just one question in the selected teaching language, without explaining the answer or giving hints first. Wait for my answer.':'Start the current material-based lesson. Briefly introduce one key concept from the selected material on the blackboard, then ask me just one Socratic question in the selected teaching language. Wait for my answer.'});notice('')});
-  window.learningRoom={api,notice,view,refresh,getState:()=>state,getTask:()=>activeTask,selectTask,context,isConnected:()=>connected,sendText(text){$('message').value=text;return $('send').onclick()},canChangeReading:()=>!busy&&!reviewTicket&&!preparingInput&&!awaitingResponse,isBusy:()=>busy||recording||!!reviewTicket||preparingInput||awaitingResponse};
+  window.learningRoom={api,notice,view,refresh,getState:()=>state,getTask:()=>activeTask,selectTask,context,isConnected:()=>connected,sendText(text){$('message').value=text;return $('send').onclick()},canChangeReading:()=>!externalWork&&!busy&&!reviewTicket&&!preparingInput&&!awaitingResponse,isBusy:()=>externalWork||busy||recording||!!reviewTicket||preparingInput||awaitingResponse,
+    async runReadingAction(fn){if(this.isBusy())throw Error('请先结束录音、回答或当前文档处理。');externalWork=true;try{return await fn()}finally{externalWork=false}}};
   $('complete-lesson').onclick=action(async()=>{
     if(!activeTask)throw Error('请先选择学习任务。');
     await api('/study/complete',{id:activeTask,date:localDate(),grade:$('review-grade').value});await refresh();notice('已保存完成记录。可以打开「课后整理与练习」，总结本节并开始回忆。');
@@ -255,7 +257,7 @@
   }
   $('record').onclick=action(async()=>{
     if(recording){await stopRecording();return}
-    if(!connected||busy||awaitingResponse||reviewTicket)throw Error('请等老师连接、结束回答或完成转写确认后再录音。');
+    if(externalWork||!connected||busy||awaitingResponse||reviewTicket)throw Error('请等老师连接、结束回答或完成当前文档处理后再录音。');
     if(!navigator.mediaDevices?.getUserMedia)throw Error('此浏览器不支持录音，可使用系统输入法。');
     stream=await navigator.mediaDevices.getUserMedia({audio:{channelCount:1,echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
     try{

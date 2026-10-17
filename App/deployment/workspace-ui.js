@@ -27,6 +27,19 @@
     button('引导我理解',async()=>{await selectedContext();await reading.ask('请围绕我选中的原文进行苏格拉底式引导，一次只问一个问题，等我回答。')}),
     button('讲解本页',async()=>{await reading.setPage(page);await reading.ask('请简短讲解当前页最重要的一个概念，再让我用简单英语复述。')}),note);
   panel.append(el('h3','原文阅读 · 与老师同步'),toolbar,actions,status,stage);desk.prepend(panel);
+  const mediaTools=el('div',undefined,'pdf-toolbar'),visualQuestion=el('input');visualQuestion.maxLength=2000;visualQuestion.placeholder='例如：这个图表的两个指标有什么关系？';visualQuestion.setAttribute('aria-label','本页图表问题');
+  const visualReply=el('p',undefined,'learning-copy');visualReply.setAttribute('aria-live','polite');
+  const annotatedPDF=el('input');annotatedPDF.type='file';annotatedPDF.accept='.pdf,application/pdf';annotatedPDF.setAttribute('aria-label','外部批注PDF');
+  function paintOCR(regions){
+    if(!regions.length)return;surface.querySelector('.textLayer')?.remove();surface.querySelector('.ocr-text-layer')?.remove();
+    const layer=el('div',undefined,'ocr-text-layer'),ctx=document.createElement('canvas').getContext('2d'),width=parseFloat(surface.style.width),height=parseFloat(surface.style.height);
+    for(const r of regions){const [x0,y0,x1,y1]=r.rect,h=(y1-y0)*height,w=(x1-x0)*width,size=Math.max(4,h*.85),span=el('span',r.text);ctx.font=size+'px sans-serif';const measured=ctx.measureText(r.text).width;span.style.cssText=`left:${x0*100}%;top:${y0*100}%;height:${h}px;font-size:${size}px;line-height:${h}px;transform:scaleX(${Math.max(.1,Math.min(10,w/Math.max(1,measured)))})`;layer.append(span)}surface.append(layer)
+  }
+  mediaTools.append(button('扫描页取词（本机）',async()=>{const current=sid,p=page;status.textContent='正在本机识别当前页文字…';const r=await room.runReadingAction(()=>api('media/ocr',{session_id:current,page:p}));if(sid!==current||page!==p)return;paintOCR(r.regions);status.textContent=r.regions.length?'OCR文字层已就绪，可划线、取词和提问；识别可能有错字，请核对页面。':'本页没有识别到文字，可尝试看图提问。'}),visualQuestion,
+    button('发送本页给视觉模型',async()=>{if(!visualQuestion.value.trim())throw Error('先填写本页图表问题。');const current=sid,p=page;await reading.flushDraft();visualReply.textContent='正在向你配置的模型发送当前页图像并分析…';try{const r=await room.runReadingAction(()=>api('media/visual',{session_id:current,page:p,question:visualQuestion.value,send_page:true}));visualReply.textContent=r.answer+'\n\n'+r.label;await reading.reloadCurrent();await syncNotes()}catch(e){visualReply.textContent='看图未完成：'+e.message+'。原文和已有记录仍保留。';throw e}}),
+    button('让老师继续讲解看图结果',async()=>{await reading.ask('请基于当前页最近一次看图解释，先说明可见事实与推测，再用简单语言解释我的问题。没有看图记录时请提示我先发送本页。')}));
+  const importTools=el('div',undefined,'pdf-toolbar');importTools.append(annotatedPDF,button('导回外部PDF批注',async()=>{const file=annotatedPDF.files[0];if(!file)throw Error('请选择同一教材的批注PDF。');if(file.size>50*1024*1024)throw Error('批注PDF上限50MB。');const form=new FormData();form.append('session_id',sid);form.append('file',file);status.textContent='正在核对教材页面和批注…';const r=await room.runReadingAction(async()=>{const response=await fetch('/study/workspace/media/import-annotations',{method:'POST',headers:{'X-SQE-CSRF':window.SQE_CSRF},body:form});const data=await response.json();if(!response.ok)throw Error(data.detail||'批注导入失败。');return data});await showPage(page,false);status.textContent=`新增 ${r.added} 项，跳过 ${r.skipped} 项，冲突保留 ${r.conflicts} 项，未支持 ${r.unsupported} 项。`+r.message;annotatedPDF.value='';await syncNotes()}));
+  stage.after(mediaTools,el('p','本机OCR不上传页面。看图按钮会发送当前页给已配置的模型，需模型支持图片；解释仍可能出错。外部批注导回会核对页面，保留冲突，不同步删除。','muted'),visualReply,importTools);
   function capture(){
     const selection=window.getSelection();
     if(!selection?.rangeCount||!surface.contains(selection.anchorNode)||!surface.contains(selection.focusNode))return;
@@ -62,13 +75,14 @@
       const marks=el('div',undefined,'pdf-marks');surface.append(marks);
       for(const mark of data.annotations)for(const r of mark.rects){const h=el('div',undefined,'pdf-highlight');h.title=mark.note||mark.quote;h.style.cssText=`left:${r[0]*100}%;top:${r[1]*100}%;width:${(r[2]-r[0])*100}%;height:${(r[3]-r[1])*100}%`;marks.append(h)}
       const textLayer=el('div',undefined,'textLayer');surface.append(textLayer);textTask=new module.TextLayer({textContentSource:await p.getTextContent(),container:textLayer,viewport});await textTask.render();
+      const ocr=await api('media/ocr?session_id='+encodeURIComponent(sid)+'&page='+page);if(ticket===generation)paintOCR(ocr.regions);
       pageInput.value=String(page);pageInput.max=String(total);pageLabel.textContent='/ '+total+' 页';
       status.textContent='第 '+page+' 页已同步给老师。选中原文后，可直接说“解释这句话”。';
     }finally{loading=false}
   }
   async function loadDocument(){
     const data=reading.current;if(!data||sid===data.id)return;
-    sid=data.id;bookId=data.book_id;pdf?.destroy();pdf=null;pendingSelection=null;panel.hidden=true;
+    sid=data.id;bookId=data.book_id;pdf?.destroy();pdf=null;pendingSelection=null;panel.hidden=true;visualReply.textContent='';visualQuestion.value='';annotatedPDF.value='';
     const b=room.getState().books.find(b=>b.id===bookId);if(!b||!b.name.toLowerCase().endsWith('.pdf'))return;
     panel.hidden=false;status.textContent='正在打开 PDF…';
     try{

@@ -176,7 +176,7 @@ async def home():
 async def status():
     connection = load_connection()
     provider = connection.get('provider', 'chatgpt')
-    return {'app': 'sqe-english-tutor', 'package_instance': json.loads(RUNTIME.read_text(encoding='utf-8'))['package_instance'], 'version': '0.6.0', 'connected': bool(connection.get('access_token')) if provider == 'chatgpt' else bool(connection.get('api_configs', {}).get(provider)), 'provider': provider, 'plan_enabled': plan_enabled(connection),
+    return {'app': 'sqe-english-tutor', 'package_instance': json.loads(RUNTIME.read_text(encoding='utf-8'))['package_instance'], 'version': '0.7.0', 'connected': bool(connection.get('access_token')) if provider == 'chatgpt' else bool(connection.get('api_configs', {}).get(provider)), 'provider': provider, 'plan_enabled': plan_enabled(connection),
             'email': connection.get('email', ''), 'model': connection.get('model', ''),
             'tested': connection.get('tested', False)}
 
@@ -424,6 +424,8 @@ async def response_events(messages, model):
         yield part
 
 
+from deployment.vision import install as install_vision
+app.state.reading_vision=install_vision(load_connection,access_token,openai_client,inference_lock,RESOURCE)
 from deployment.study_routes import install_study_routes
 install_study_routes(app, check_action, CSRF, response_events, load_connection)
 

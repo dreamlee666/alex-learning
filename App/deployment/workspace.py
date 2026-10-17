@@ -151,7 +151,8 @@ def pdf_export(store,bid):
                 r=fitz.Rect(x0*p.rect.width,y0*p.rect.height,x1*p.rect.width,y1*p.rect.height)
                 rects.append(r*p.derotation_matrix)
             mark=p.add_highlight_annot(rects)
-            mark.set_info(content=a['note'] or a['quote']);mark.update()
+            mark.set_info(content=a['note'] or a['quote'],title='Alex Learning')
+            doc.xref_set_key(mark.xref,'NM',fitz.get_pdf_str('alex:'+a['id']));mark.update()
         return doc.tobytes(garbage=3,deflate=True)
 
 
